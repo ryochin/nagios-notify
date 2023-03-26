@@ -1,0 +1,16 @@
+************************
+■ {{ title }}
+************************
+
+発生時刻　：{{ datetime }}
+状況　　　：{{ status_description }}
+ホスト　　：{{ args.host }} ({{ host_address }})
+{%- if args.output %}
+サービス　：{{ args.service }}
+{%- endif %}
+{%- if args.output %}
+詳細情報　：{{ args.output }}
+{%- endif %}
+
+-- 
+nagios <{{ monitor }}>

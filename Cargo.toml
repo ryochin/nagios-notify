@@ -1,0 +1,19 @@
+[package]
+name = "nagios-notify"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.70"
+chrono = "0.4.24"
+clap = { version = "4.1.13", features = ["derive", "unicode"] }
+hostname = "0.3.1"
+lettre = "0.10.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9.19"
+tera = "1.18.1"
+tracing = "0.1.37"
+tracing-appender = "0.2.2"
+tracing-subscriber = { version = "0.3.16", features = [ "env-filter" ] }
+strum = "0.24"
+strum_macros = "0.24"
