@@ -7,13 +7,13 @@ use lettre::message::Mailboxes;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use serde::{Deserialize, Serialize};
-use tera::Context;
-use tera::Tera;
-
+use strum_macros::{Display as EnumDisplay, EnumString};
+use tera::{Context, Tera};
+use time::macros::format_description;
+use time::util::local_offset::{set_soundness, Soundness};
 use tracing::{debug, error, info};
 use tracing_subscriber::filter::EnvFilter;
-
-use strum_macros::{Display as EnumDisplay, EnumString};
+use tracing_subscriber::fmt::time::LocalTime;
 
 /// Nagios Notify
 #[derive(Parser, Debug, Clone, Serialize)]
@@ -111,14 +111,21 @@ enum Status {
 }
 
 fn main() {
+    unsafe {
+        set_soundness(Soundness::Unsound);
+    }
+
     let file_appender = tracing_appender::rolling::daily("./log", "notify.log");
 
     tracing_subscriber::fmt()
+        .with_timer(LocalTime::new(format_description!(
+            "[year]-[month]-[day]T[hour repr:24]:[minute]:[second].[subsecond digits:6]Z"
+        )))
         .with_writer(file_appender)
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    info!("started");
+    debug!("started");
 
     let args = Args::parse();
 
@@ -203,7 +210,7 @@ fn send_mail(
 
     match mailer.send(&email) {
         Ok(_) => {
-            info!("Email sent successfully!");
+            info!("Email sent successfully");
             Ok(())
         }
         Err(e) => {

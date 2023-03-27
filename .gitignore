@@ -49,3 +49,4 @@ Cargo.lock
 /.vscode/
 /log/*.log*
 /config.yml
+/upload_*.sh
