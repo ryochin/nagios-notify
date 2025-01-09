@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{Display as EnumDisplay, EnumString};
 use tera::{Context, Tera};
 use time::macros::format_description;
-use time::util::local_offset::{set_soundness, Soundness};
 use tracing::{debug, error, info};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::fmt::time::LocalTime;
@@ -111,10 +110,6 @@ enum Status {
 }
 
 fn main() {
-    unsafe {
-        set_soundness(Soundness::Unsound);
-    }
-
     let file_appender = tracing_appender::rolling::daily("./log", "notify.log");
 
     tracing_subscriber::fmt()

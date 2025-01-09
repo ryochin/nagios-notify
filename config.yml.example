@@ -1,0 +1,5 @@
+smtp:
+  host: localhost
+  user_name: user
+  password: blah
+  from: nagios <noreply@localhost>
