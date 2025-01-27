@@ -6,13 +6,13 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.95"
 chrono = "0.4.39"
-clap = { version = "4.5.24", features = ["derive", "unicode"] }
-hostname = "0.3.1"
-lettre = { version = "0.10.4", default-features = false, features = ["builder", "smtp-transport", "rustls-tls"] }
+clap = { version = "4.5.27", features = ["derive", "unicode"] }
+hostname = "0.4.0"
+lettre = { version = "0.11.11", default-features = false, features = ["builder", "smtp-transport", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9.34"
-strum = "0.24"
-strum_macros = "0.24"
+strum = "0.26"
+strum_macros = "0.26"
 tera = "1.20.0"
 time = { version = "0.3.37", features = ["macros", "formatting"] }
 tracing = "0.1.41"
