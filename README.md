@@ -24,5 +24,8 @@ install -c -m 0644 template.txt /app/nagios-notify/
 # binary
 cargo build --release
 install -c -m 0755 target/release/nagios-notify /app/nagios-notify/notify
+
+# misc
+install -c -m 0644 logrotate.d/nagios-notify /etc/logrotate.d/
 ```
 
