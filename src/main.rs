@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use std::process::exit;
 
 use chrono::NaiveDateTime;
 use clap::{Parser, ValueEnum};
@@ -57,6 +58,10 @@ struct Args {
     /// Service Output
     #[clap(short)]
     output: Option<String>,
+
+    /// Dry Run
+    #[clap(long)]
+    dry_run: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,9 +137,14 @@ fn main() {
         println!("{}", &body);
     }
 
+    if args.dry_run {
+        info!("Dry run mode enabled, not sending email.");
+        exit(0);
+    }
+
     match send_mail(&config, &args, &body) {
-        Ok(()) => ::std::process::exit(0),
-        Err(_e) => ::std::process::exit(1),
+        Ok(()) => exit(0),
+        Err(_e) => exit(1),
     }
 }
 
@@ -149,8 +159,8 @@ fn create_body(args: &Args) -> tera::Result<String> {
     let tera = match Tera::new("./*.txt") {
         Ok(t) => t,
         Err(e) => {
-            println!("Parsing error(s): {}", e);
-            ::std::process::exit(1);
+            println!("Parsing error(s): {e}");
+            exit(1);
         }
     };
 
