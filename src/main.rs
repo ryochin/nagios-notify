@@ -1,4 +1,8 @@
 use std::fmt::Debug;
+use std::fs::{File, OpenOptions};
+use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use std::process::exit;
 
 use chrono::NaiveDateTime;
@@ -114,14 +118,16 @@ enum Status {
     Unreachable,
 }
 
-fn main() {
-    let file_appender = tracing_appender::rolling::daily("./log", "notify.log");
+fn main() -> anyhow::Result<()> {
+    std::fs::create_dir_all("./log")?;
+
+    let log_file = open_log_file()?;
 
     tracing_subscriber::fmt()
         .with_timer(LocalTime::new(format_description!(
             "[year]-[month]-[day]T[hour repr:24]:[minute]:[second].[subsecond digits:6]Z"
         )))
-        .with_writer(file_appender)
+        .with_writer(log_file)
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
@@ -146,6 +152,20 @@ fn main() {
         Ok(()) => exit(0),
         Err(_e) => exit(1),
     }
+}
+
+fn open_log_file() -> std::io::Result<File> {
+    let path = Path::new("./log/notify.log");
+
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .mode(0o660) // no effect due to umask??
+        .open(path)?;
+
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o660))?;
+
+    Ok(file)
 }
 
 fn load_config() -> Result<Config, String> {

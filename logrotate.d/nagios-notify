@@ -1,1 +1,9 @@
-40 3 * 1 * nagios /usr/sbin/tmpwatch --mtime -q 30d /app/nagios-notify/log > /dev/null 2>&1
+/app/nagios-notify/log/notify.log {
+  daily
+  missingok
+  rotate 14
+  compress
+  delaycompress
+  notifempty
+  sharedscripts
+}
