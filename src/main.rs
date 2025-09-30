@@ -1,7 +1,6 @@
 use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
 use std::os::unix::fs::OpenOptionsExt;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::exit;
 
@@ -162,8 +161,6 @@ fn open_log_file() -> std::io::Result<File> {
         .append(true)
         .mode(0o660) // no effect due to umask??
         .open(path)?;
-
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o660))?;
 
     Ok(file)
 }
