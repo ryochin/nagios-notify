@@ -13,4 +13,4 @@
 {%- endif %}
 
 -- 
-nagios <{{ monitor }}>
+nagios <notify@{{ monitor }}>
