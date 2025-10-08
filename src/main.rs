@@ -4,10 +4,11 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::process::exit;
 
+use anyhow::anyhow;
 use chrono::NaiveDateTime;
 use clap::{Parser, ValueEnum};
-use lettre::message::header::{self, ContentType, UserAgent};
 use lettre::message::Mailboxes;
+use lettre::message::header::{self, ContentType, UserAgent};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use serde::{Deserialize, Serialize};
@@ -17,6 +18,10 @@ use time::macros::format_description;
 use tracing::{debug, error, info};
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::fmt::time::LocalTime;
+
+use aws_config::BehaviorVersion;
+use aws_config::SdkConfig;
+use aws_sdk_sns as sns;
 
 /// Nagios Notify
 #[derive(Parser, Debug, Clone, Serialize)]
@@ -65,11 +70,16 @@ struct Args {
     /// Dry Run
     #[clap(long)]
     dry_run: bool,
+
+    /// Method
+    #[clap(short, default_value = "smtp")]
+    method: Option<Method>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Config {
     smtp: Smtp,
+    sns: Option<Sns>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,6 +88,20 @@ struct Smtp {
     user_name: String,
     password: String,
     from: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Sns {
+    aws_profile: String,
+    topic_arn: String,
+}
+
+#[derive(ValueEnum, Debug, Copy, Clone, PartialEq, Eq, Serialize)]
+enum Method {
+    #[value(rename_all = "LOWER")]
+    Smtp,
+    #[value(rename_all = "LOWER")]
+    Sns,
 }
 
 #[derive(ValueEnum, Debug, Copy, Clone, PartialEq, Eq, Serialize)]
@@ -117,7 +141,8 @@ enum Status {
     Unreachable,
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all("./log")?;
 
     let log_file = open_log_file()?;
@@ -136,21 +161,44 @@ fn main() -> anyhow::Result<()> {
 
     let config = load_config().expect("failed to load config file");
 
-    let body = create_body(&args).expect("failed to create mail body");
+    if let Some(method) = args.method {
+        if method == Method::Smtp {
+            let body = create_body(&args).expect("failed to create mail body");
 
-    if args.verbose {
-        println!("{}", &body);
+            if args.verbose {
+                println!("{}", &body);
+            }
+
+            if args.dry_run {
+                info!("Dry run mode enabled, not sending email.");
+                exit(0);
+            }
+
+            match send_mail(&config, &args, &body) {
+                Ok(()) => exit(0),
+                Err(_e) => exit(1),
+            }
+        } else if method == Method::Sns {
+            // let body = create_body(&args).expect("failed to create mail body");
+            let body = subject(&args);
+
+            if args.verbose {
+                println!("{}", &body);
+            }
+
+            if args.dry_run {
+                info!("Dry run mode enabled, not sending sns.");
+                exit(0);
+            }
+
+            match push_sns(&config, &body).await {
+                Ok(()) => exit(0),
+                Err(_e) => exit(1),
+            }
+        }
     }
 
-    if args.dry_run {
-        info!("Dry run mode enabled, not sending email.");
-        exit(0);
-    }
-
-    match send_mail(&config, &args, &body) {
-        Ok(()) => exit(0),
-        Err(_e) => exit(1),
-    }
+    Ok(())
 }
 
 fn open_log_file() -> std::io::Result<File> {
@@ -240,6 +288,53 @@ fn send_mail(
             Err(e)
         }
     }
+}
+
+async fn push_sns(config: &Config, message: &str) -> anyhow::Result<()> {
+    let aws_config = load_aws_config(config).await?;
+    let client = sns::Client::new(&aws_config);
+
+    let topic_arn = config
+        .sns
+        .as_ref()
+        .map(|s| s.topic_arn.as_str())
+        .ok_or_else(|| anyhow!("SNS configuration not found"))?;
+
+    debug!("topic arn: {}", topic_arn);
+
+    match client
+        .publish()
+        .topic_arn(topic_arn)
+        .message(message)
+        .send()
+        .await
+    {
+        Ok(out) => {
+            info!(
+                "SNS sent successfully: {}",
+                out.message_id().unwrap_or_default()
+            );
+            Ok(())
+        }
+        Err(e) => {
+            error!("Could not send SNS: {e:?}");
+            Err(e.into())
+        }
+    }
+}
+
+async fn load_aws_config(config: &Config) -> anyhow::Result<SdkConfig> {
+    let profile = config
+        .sns
+        .as_ref()
+        .map(|s| s.aws_profile.as_str())
+        .unwrap_or("default");
+
+    debug!("aws profile: {}", profile);
+
+    let loader = aws_config::defaults(BehaviorVersion::latest()).profile_name(profile);
+
+    Ok(loader.load().await)
 }
 
 fn mailer_name() -> UserAgent {
