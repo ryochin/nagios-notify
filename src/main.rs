@@ -76,6 +76,10 @@ struct Args {
     /// Method
     #[clap(short, default_value = "smtp")]
     method: Option<Method>,
+
+    /// SNS Topic (required when method is sns)
+    #[clap(short = 'T')]
+    topic: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,8 +98,9 @@ struct Smtp {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Sns {
+    aws_account_id: String,
     aws_profile: String,
-    topic_arn: String,
+    aws_region: String,
 }
 
 #[derive(ValueEnum, Debug, Copy, Clone, PartialEq, Eq, Serialize)]
@@ -161,7 +166,34 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
+    // Validate SNS method requires topic
+    if args.method == Some(Method::Sns) && args.topic.is_none() {
+        error!("--topic is required when using --method sns");
+        exit(1);
+    }
+
     let config = load_config().expect("failed to load config file");
+
+    // Validate SNS configuration
+    if args.method == Some(Method::Sns) {
+        if let Some(sns_config) = &config.sns {
+            if sns_config.aws_account_id.is_empty() {
+                error!("sns.aws_account_id must not be empty in config");
+                exit(1);
+            }
+            if sns_config.aws_profile.is_empty() {
+                error!("sns.aws_profile must not be empty in config");
+                exit(1);
+            }
+            if sns_config.aws_region.is_empty() {
+                error!("sns.aws_region must not be empty in config");
+                exit(1);
+            }
+        } else {
+            error!("sns configuration is required when using --method sns");
+            exit(1);
+        }
+    }
 
     if let Some(method) = args.method {
         if method == Method::Smtp {
@@ -193,7 +225,7 @@ async fn main() -> anyhow::Result<()> {
                 exit(0);
             }
 
-            match push_sns(&config, &body).await {
+            match push_sns(&config, &args, &body).await {
                 Ok(()) => exit(0),
                 Err(_e) => exit(1),
             }
@@ -295,15 +327,24 @@ fn send_mail(
     }
 }
 
-async fn push_sns(config: &Config, message: &str) -> anyhow::Result<()> {
+async fn push_sns(config: &Config, args: &Args, message: &str) -> anyhow::Result<()> {
     let aws_config = load_aws_config(config).await?;
     let client = sns::Client::new(&aws_config);
 
-    let topic_arn = config
+    let topic = args
+        .topic
+        .as_ref()
+        .ok_or_else(|| anyhow!("topic is required when using SNS method"))?;
+
+    let sns_config = config
         .sns
         .as_ref()
-        .map(|s| s.topic_arn.as_str())
         .ok_or_else(|| anyhow!("SNS configuration not found"))?;
+
+    let topic_arn = format!(
+        "arn:aws:sns:{}:{}:{}",
+        sns_config.aws_region, sns_config.aws_account_id, topic
+    );
 
     debug!("topic arn: {}", topic_arn);
 
