@@ -4,6 +4,8 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::process::exit;
 
+use fs2::FileExt;
+
 use anyhow::anyhow;
 use chrono::NaiveDateTime;
 use clap::{Parser, ValueEnum};
@@ -209,6 +211,9 @@ fn open_log_file() -> std::io::Result<File> {
         .append(true)
         .mode(0o660) // no effect due to umask??
         .open(path)?;
+
+    // Acquire exclusive lock on the log file
+    file.lock_exclusive()?;
 
     Ok(file)
 }
