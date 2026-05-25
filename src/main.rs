@@ -91,6 +91,7 @@ struct Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Smtp {
     host: String,
+    port: Option<u16>,
     user_name: String,
     password: String,
     from: String,
@@ -303,17 +304,26 @@ fn send_mail(
         .body(String::from(body))
         .unwrap();
 
-    let creds = Credentials::new(
-        config.smtp.user_name.to_owned(),
-        config.smtp.password.to_owned(),
-    );
+    match config.smtp.port {
+        Some(port) => debug!("relay host: {}:{}", &config.smtp.host, port),
+        None => debug!("relay host: {}", &config.smtp.host),
+    }
 
-    debug!("relay host: {}", &config.smtp.host);
-
-    let mailer = SmtpTransport::relay(&config.smtp.host)
-        .unwrap()
-        .credentials(creds)
-        .build();
+    let mailer = match config.smtp.port {
+        Some(25) => SmtpTransport::builder_dangerous(&config.smtp.host)
+            .port(25)
+            .build(),
+        _ => {
+            let creds = Credentials::new(
+                config.smtp.user_name.to_owned(),
+                config.smtp.password.to_owned(),
+            );
+            SmtpTransport::relay(&config.smtp.host)
+                .unwrap()
+                .credentials(creds)
+                .build()
+        }
+    };
 
     match mailer.send(&email) {
         Ok(_) => {
