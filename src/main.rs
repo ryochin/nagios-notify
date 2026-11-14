@@ -22,6 +22,7 @@ use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::fmt::time::LocalTime;
 
 use aws_config::BehaviorVersion;
+use aws_config::Region;
 use aws_config::SdkConfig;
 use aws_sdk_sns as sns;
 
@@ -100,7 +101,9 @@ struct Smtp {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Sns {
     aws_account_id: String,
-    aws_profile: String,
+    /// Omit to use the default credential provider chain (e.g. an EC2 instance role)
+    #[serde(default)]
+    aws_profile: Option<String>,
     aws_region: String,
 }
 
@@ -180,10 +183,6 @@ async fn main() -> anyhow::Result<()> {
         if let Some(sns_config) = &config.sns {
             if sns_config.aws_account_id.is_empty() {
                 error!("sns.aws_account_id must not be empty in config");
-                exit(1);
-            }
-            if sns_config.aws_profile.is_empty() {
-                error!("sns.aws_profile must not be empty in config");
                 exit(1);
             }
             if sns_config.aws_region.is_empty() {
@@ -380,15 +379,21 @@ async fn push_sns(config: &Config, args: &Args, message: &str) -> anyhow::Result
 }
 
 async fn load_aws_config(config: &Config) -> anyhow::Result<SdkConfig> {
-    let profile = config
+    let sns_config = config
         .sns
         .as_ref()
-        .map(|s| s.aws_profile.as_str())
-        .unwrap_or("default");
+        .ok_or_else(|| anyhow!("SNS configuration not found"))?;
 
-    debug!("aws profile: {}", profile);
+    let mut loader = aws_config::defaults(BehaviorVersion::latest())
+        .region(Region::new(sns_config.aws_region.clone()));
 
-    let loader = aws_config::defaults(BehaviorVersion::latest()).profile_name(profile);
+    match sns_config.aws_profile.as_deref().filter(|p| !p.is_empty()) {
+        Some(profile) => {
+            debug!("aws profile: {}", profile);
+            loader = loader.profile_name(profile);
+        }
+        None => debug!("aws profile: none (default credential provider chain)"),
+    }
 
     Ok(loader.load().await)
 }
